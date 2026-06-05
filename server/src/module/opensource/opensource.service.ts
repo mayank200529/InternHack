@@ -21,12 +21,24 @@ export class OpensourceService {
     if (language) where.language = language;
     if (difficulty) where.difficulty = difficulty;
     if (domain) where.domain = domain;
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { owner: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-        { tags: { hasSome: [search] } },
+    const trimmedSearch = search?.trim();
+
+    if (trimmedSearch) {
+      const tagMatches = await prisma.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM "opensourceRepo"
+        WHERE EXISTS (
+          SELECT 1 FROM unnest(tags) AS t WHERE t ILIKE ${`%${trimmedSearch}%`}
+        )
+      `;
+    
+      const tagMatchIds = tagMatches.map((r) => r.id);
+    
+      where["OR"] = [
+        { name: { contains: trimmedSearch, mode: "insensitive" } },
+        { owner: { contains: trimmedSearch, mode: "insensitive" } },
+        { description: { contains: trimmedSearch, mode: "insensitive" } },
+        { language: { contains: trimmedSearch, mode: "insensitive" } },
+        ...(tagMatchIds.length > 0 ? [{ id: { in: tagMatchIds } }] : []),
       ];
     }
 
